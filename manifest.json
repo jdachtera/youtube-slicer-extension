@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "React Content Script",
+  "name": "Youtube Slicer",
   "version": "1.0.0",
   "action": {
     "default_title": "Popup",
@@ -10,7 +10,7 @@
   "icons": {},
   "content_scripts": [
     {
-      "matches": ["https://blank.org/*"],
+      "matches": ["https://www.youtube.com/*","https://www.youtube.com/*"],
       "js": ["content-script/src/main.tsx"],
       "media": []
     }
