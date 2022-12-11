@@ -1,4 +1,4 @@
-export default async function ytdlr(id: string, lang = "en-US") {
+export default async function fetchVideoData(id: string, lang = "en-US") {
   const apiKey = await findInnertubeApiKey();
 
   const host = "https://www.youtube.com";

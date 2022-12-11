@@ -1,7 +1,8 @@
 import "./main.css";
 import { render } from "solid-js/web";
-import App from "./App";
+import YoutubeSlicer from "./YoutubeSlicer";
 import lodash from "lodash";
+import App from "./App";
 
 const body = document.querySelector("body");
 const appContainer = document.createElement("div");
