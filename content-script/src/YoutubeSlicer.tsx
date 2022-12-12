@@ -35,6 +35,8 @@ const loadVideoData = async (videoId: string) => {
 };
 
 function YoutubeSlicer() {
+  let audioSource: AudioBufferSourceNode | undefined;
+
   const audioCtx = new (window.AudioContext ||
     (window as any).webkitAudioContext)();
 
@@ -108,6 +110,15 @@ function YoutubeSlicer() {
     "m",
   ];
 
+  const playRegion = (region: Region) => {
+    audioSource?.stop();
+    audioSource = new AudioBufferSourceNode(audioCtx, {
+      buffer: audioBuffer(),
+    });
+    audioSource.connect(audioCtx.destination);
+    audioSource.start(0, region.start, region.end - region.start);
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     const index = keys.indexOf(event.key);
 
@@ -135,16 +146,6 @@ function YoutubeSlicer() {
   const [scale, setScale] = createSignal(1);
   const [logScale, setLogScale] = createSignal(false);
   const [regions, setRegions] = createSignal<Region[]>([]);
-
-  let timeout: number = 0;
-  const playRegion = (region: Region) => {
-    videoTag.currentTime = region.start;
-    videoTag.play();
-    clearTimeout(timeout);
-    setTimeout(() => {
-      videoTag.pause();
-    }, (region.end - region.start) * 1000);
-  };
 
   const encodeRegionWavefile = async (region: Region) => {
     const buffer = audioBuffer();
@@ -254,6 +255,7 @@ function YoutubeSlicer() {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell>Key</TableCell>
               <TableCell>Start</TableCell>
               <TableCell>End</TableCell>
               <TableCell>Duration</TableCell>
@@ -264,6 +266,7 @@ function YoutubeSlicer() {
             <Index each={regions()}>
               {(region, index) => (
                 <TableRow sx={{ backgroundColor: region().color }}>
+                  <TableCell>{keys[index]}</TableCell>
                   <TableCell>{region().start.toFixed(2)}</TableCell>
                   <TableCell>{region().end.toFixed(2)}</TableCell>
 
