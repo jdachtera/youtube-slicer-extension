@@ -79,14 +79,55 @@ function YoutubeSlicer() {
 
   const mutationObserver = new MutationObserver(refetchVideoData);
 
+  const keys = [
+    "q",
+    "w",
+    "e",
+    "r",
+    "t",
+    "y",
+    "u",
+    "i",
+    "o",
+    "p",
+    "a",
+    "s",
+    "d",
+    "f",
+    "g",
+    "h",
+    "j",
+    "k",
+    "l",
+    "z",
+    "x",
+    "c",
+    "v",
+    "b",
+    "n",
+    "m",
+  ];
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    const index = keys.indexOf(event.key);
+
+    const region = regions()[index];
+    if (region) {
+      playRegion(region);
+    }
+  };
+
   onMount(() => {
     mutationObserver.observe(videoTag, {
       attributeFilter: ["src"],
     });
+
+    window.addEventListener("keydown", handleKeyDown);
   });
 
   onCleanup(() => {
     mutationObserver.disconnect();
+    window.removeEventListener("keydown", handleKeyDown);
   });
 
   const [position, setPosition] = createSignal(0);
@@ -95,9 +136,14 @@ function YoutubeSlicer() {
   const [logScale, setLogScale] = createSignal(false);
   const [regions, setRegions] = createSignal<Region[]>([]);
 
+  let timeout: number = 0;
   const playRegion = (region: Region) => {
     videoTag.currentTime = region.start;
     videoTag.play();
+    clearTimeout(timeout);
+    setTimeout(() => {
+      videoTag.pause();
+    }, (region.end - region.start) * 1000);
   };
 
   const encodeRegionWavefile = async (region: Region) => {
@@ -222,7 +268,7 @@ function YoutubeSlicer() {
                   <TableCell>{region().end.toFixed(2)}</TableCell>
 
                   <TableCell>
-                    {(region().start - region().end).toFixed(2)}
+                    {(region().end - region().start).toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <IconButton onClick={() => deleteRegion(region())}>
