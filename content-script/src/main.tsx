@@ -1,7 +1,7 @@
 import "./main.css";
 import { render } from "solid-js/web";
 import YoutubeSlicer from "./YoutubeSlicer";
-import lodash from "lodash";
+import lodash, { debounce } from "lodash";
 import App from "./App";
 
 const body = document.querySelector("body");
@@ -24,8 +24,8 @@ const interval = setInterval(() => {
   body?.appendChild(appContainer);
 
   const placeApp = () => {
-    const { top } = columnsDiv.getBoundingClientRect();
-    appContainer.setAttribute("style", `top: ${top - 300}px`);
+    const { bottom } = getOffset(videoTag);
+    appContainer.setAttribute("style", `top: ${bottom}px`);
   };
 
   placeApp();
@@ -34,3 +34,15 @@ const interval = setInterval(() => {
 
   render(() => <App />, appContainer);
 }, 50);
+
+2;
+
+function getOffset(el: HTMLElement) {
+  var position = el.getBoundingClientRect();
+  return {
+    left: position.left + window.scrollX,
+    top: position.top + window.scrollY,
+    right: position.right + window.scrollX,
+    bottom: position.bottom + window.scrollY,
+  };
+}

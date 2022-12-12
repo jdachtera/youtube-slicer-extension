@@ -4,6 +4,7 @@ import {
   createEffect,
   createResource,
   createSignal,
+  Index,
   onCleanup,
   onMount,
 } from "solid-js";
@@ -15,6 +16,18 @@ import FileSaver from "file-saver";
 import "./App.css";
 import { encodeWav } from "./encodeWav";
 import fetchVideoData from "./fetchVideoData";
+import {
+  Button,
+  Grid,
+  Icon,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from "@suid/material";
+import { Delete, Download, PlayArrow } from "@suid/icons-material";
 
 const loadVideoData = async (videoId: string) => {
   const videoData = await fetchVideoData(videoId);
@@ -87,6 +100,32 @@ function YoutubeSlicer() {
     videoTag.play();
   };
 
+  const encodeRegionWavefile = async (region: Region) => {
+    const buffer = audioBuffer();
+    if (!buffer || !regions().length) return;
+
+    var startOffset = buffer.sampleRate * region.start;
+    var endOffset = buffer.sampleRate * region.end;
+    var frameCount = endOffset - startOffset;
+
+    const slicedAudioBuffer = audioCtx.createBuffer(
+      buffer.numberOfChannels,
+      endOffset - startOffset,
+      buffer.sampleRate
+    );
+
+    const copyArray = new Float32Array(frameCount);
+    const offset = 0;
+
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      buffer.copyFromChannel(copyArray, channel, startOffset);
+      slicedAudioBuffer.copyToChannel(copyArray, channel, offset);
+    }
+
+    const waveFile = await encodeWav(slicedAudioBuffer);
+    return waveFile;
+  };
+
   const downloadRegions = async () => {
     const buffer = audioBuffer();
     if (!buffer || !regions().length) return;
@@ -97,28 +136,13 @@ function YoutubeSlicer() {
 
     await Promise.all(
       regions().map(async (region, index) => {
-        var startOffset = buffer.sampleRate * region.start;
-        var endOffset = buffer.sampleRate * region.end;
-        var frameCount = endOffset - startOffset;
-
-        const slicedAudioBuffer = audioCtx.createBuffer(
-          buffer.numberOfChannels,
-          endOffset - startOffset,
-          buffer.sampleRate
-        );
-
-        const copyArray = new Float32Array(frameCount);
-        const offset = 0;
-
-        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-          buffer.copyFromChannel(copyArray, channel, startOffset);
-          slicedAudioBuffer.copyToChannel(copyArray, channel, offset);
+        const waveFile = await encodeRegionWavefile(region);
+        if (waveFile) {
+          zip.file(
+            `${author}-${title}(${videoId}) [${region.start}-${region.end}].wav`,
+            waveFile
+          );
         }
-
-        zip.file(
-          `${author}-${title}(${videoId}) [${region.start}-${region.end}].wav`,
-          await encodeWav(slicedAudioBuffer)
-        );
       })
     );
 
@@ -127,37 +151,100 @@ function YoutubeSlicer() {
     });
   };
 
+  const downloadRegion = async (region: Region) => {
+    const waveFile = await encodeRegionWavefile(region);
+    const { author, title, videoId } = videoData()?.details ?? {};
+
+    if (waveFile) {
+      FileSaver.saveAs(
+        waveFile,
+        `${author}-${title}(${videoId}) [${region.start}-${region.end}].wav`
+      );
+    }
+  };
+
+  const deleteRegion = (region: Region) => {
+    const index = regions().findIndex(({ id }) => id === region.id);
+
+    setRegions([...regions().slice(0, index), ...regions().slice(index + 1)]);
+  };
+
   return (
-    <div class="App" hidden={!videoId()}>
-      <Waveform
-        style={{ height: "250px" }}
-        buffer={audioBuffer()}
-        position={position()}
-        regions={regions()}
-        zoom={zoom()}
-        scale={scale()}
-        logScale={logScale()}
-        onPositionChange={setPosition}
-        onZoomChange={setZoom}
-        onScaleChange={setScale}
-        onUpdateRegion={(region) => {
-          const index = regions().findIndex(({ id }) => id === region.id);
-          setRegions([
-            ...regions().slice(0, index),
-            region,
-            ...regions().slice(index + 1),
-          ]);
-        }}
-        onCreateRegion={(region) => {
-          setRegions([...regions(), region]);
-        }}
-        onClickRegion={playRegion}
-        strokeStyle="#f1f1f1"
-      />
-      <div>
-        <button onClick={downloadRegions}>Download regions</button>
-      </div>
-    </div>
+    <Grid container>
+      <Grid item flex={1}>
+        <Waveform
+          style={{ height: "250px" }}
+          buffer={audioBuffer()}
+          position={position()}
+          regions={regions()}
+          zoom={zoom()}
+          scale={scale()}
+          logScale={logScale()}
+          onPositionChange={setPosition}
+          onZoomChange={setZoom}
+          onScaleChange={setScale}
+          onUpdateRegion={(region) => {
+            const index = regions().findIndex(({ id }) => id === region.id);
+            setRegions([
+              ...regions().slice(0, index),
+              region,
+              ...regions().slice(index + 1),
+            ]);
+          }}
+          onCreateRegion={(region) => {
+            setRegions([...regions(), region]);
+          }}
+          onClickRegion={playRegion}
+          strokeStyle="#f1f1f1"
+        />
+      </Grid>
+      <Grid
+        item
+        height="300px"
+        width="10%"
+        minWidth={"400px"}
+        overflow={"auto"}
+      >
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Start</TableCell>
+              <TableCell>End</TableCell>
+              <TableCell>Duration</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            <Index each={regions()}>
+              {(region, index) => (
+                <TableRow sx={{ backgroundColor: region().color }}>
+                  <TableCell>{region().start.toFixed(2)}</TableCell>
+                  <TableCell>{region().end.toFixed(2)}</TableCell>
+
+                  <TableCell>
+                    {(region().start - region().end).toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => deleteRegion(region())}>
+                      <Delete />
+                    </IconButton>
+                    <IconButton onClick={() => downloadRegion(region())}>
+                      <Download />
+                    </IconButton>
+                    <IconButton onClick={() => playRegion(region())}>
+                      <PlayArrow />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              )}
+            </Index>
+          </TableBody>
+        </Table>
+        <Button onClick={downloadRegions}>
+          <Download /> Download all regions
+        </Button>
+      </Grid>
+    </Grid>
   );
 }
 
