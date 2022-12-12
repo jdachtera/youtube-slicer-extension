@@ -35,6 +35,7 @@ const App = () => {
     components: {
       MuiTableCell: {
         defaultProps: {
+          padding: "none",
           sx: { fontSize: 15 },
         },
       },
