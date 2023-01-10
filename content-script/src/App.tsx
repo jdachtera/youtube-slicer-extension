@@ -17,12 +17,9 @@ const App = () => {
       alignItems={"center"}
       justifyContent="center"
       justifyItems={"center"}
-      height={300}
+      height={100}
     >
       <Box textAlign="center">
-        <Typography variant="h2" marginBottom={5}>
-          Loading Video Slicer
-        </Typography>
         <CircularProgress />
       </Box>
     </Grid>

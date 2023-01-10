@@ -8,7 +8,7 @@ import {
   onCleanup,
   onMount,
 } from "solid-js";
-import { Region, Waveform } from "solid-waveform";
+import { PlayHead, Region, Regions, Waveform } from "solid-waveform";
 
 import JSZip from "jszip";
 import FileSaver from "file-saver";
@@ -19,7 +19,6 @@ import fetchVideoData from "./fetchVideoData";
 import {
   Button,
   Grid,
-  Icon,
   IconButton,
   Table,
   TableBody,
@@ -27,7 +26,9 @@ import {
   TableHead,
   TableRow,
 } from "@suid/material";
-import { Delete, Download, PlayArrow } from "@suid/icons-material";
+import Delete from "@suid/icons-material/Delete";
+import Download from "@suid/icons-material/Download";
+import PlayArrow from "@suid/icons-material/playArrow";
 
 const loadVideoData = async (videoId: string) => {
   const videoData = await fetchVideoData(videoId);
@@ -36,6 +37,7 @@ const loadVideoData = async (videoId: string) => {
 
 function YoutubeSlicer() {
   let audioSource: AudioBufferSourceNode | undefined;
+  let audioSourcePlayStart = 0;
 
   const audioCtx = new (window.AudioContext ||
     (window as any).webkitAudioContext)();
@@ -81,43 +83,46 @@ function YoutubeSlicer() {
 
   const mutationObserver = new MutationObserver(refetchVideoData);
 
-  const keys = [
-    "q",
-    "w",
-    "e",
-    "r",
-    "t",
-    "y",
-    "u",
-    "i",
-    "o",
-    "p",
-    "a",
-    "s",
-    "d",
-    "f",
-    "g",
-    "h",
-    "j",
-    "k",
-    "l",
-    "z",
-    "x",
-    "c",
-    "v",
-    "b",
-    "n",
-    "m",
-  ];
+  const [playHeadPosition, setPlayHeadPosition] = createSignal(0);
+  const [syncPlayHead, setSyncPlayHead] = createSignal(false);
+  const [isPlaying, setIsPlaying] = createSignal(false);
 
-  const playRegion = (region: Region) => {
+  let ignorePlayEvent = false;
+
+  const play = (start: number = 0, duration?: number) => {
+    ignorePlayEvent = true;
+    videoTag.currentTime = start;
+    playVid();
+    videoTag.volume = 0;
+
+    audioSourcePlayStart = audioCtx.currentTime - start;
+    audioSource?.removeEventListener("ended", stop);
+
     audioSource?.stop();
+    audioSource?.addEventListener("ended", (event) => {
+      (event.currentTarget as AudioBufferSourceNode)?.disconnect();
+    });
+
     audioSource = new AudioBufferSourceNode(audioCtx, {
       buffer: audioBuffer(),
     });
     audioSource.connect(audioCtx.destination);
-    audioSource.start(0, region.start, region.end - region.start);
+    audioSource.start(0, start, duration);
+    audioSource.addEventListener("ended", stop);
+
+    setIsPlaying(true);
   };
+
+  const stop = () => {
+    ignorePlayEvent = false;
+    audioSource?.stop();
+    setIsPlaying(false);
+    pauseVid();
+    setPlayHeadPosition(audioCtx.currentTime - audioSourcePlayStart);
+  };
+
+  const playRegion = (region: Region) =>
+    play(region.start, region.end - region.start);
 
   const handleKeyDown = (event: KeyboardEvent) => {
     const index = keys.indexOf(event.key);
@@ -127,6 +132,71 @@ function YoutubeSlicer() {
       playRegion(region);
     }
   };
+
+  // Initializing values
+  let videoIsPlaying = true;
+  onMount(() => {
+    // On video playing toggle values
+    videoTag.onplaying = function () {
+      videoIsPlaying = true;
+    };
+
+    // On video pause toggle values
+    videoTag.onpause = function () {
+      videoIsPlaying = false;
+    };
+  });
+
+  // Play video function
+  async function playVid() {
+    if (videoTag.paused && !isPlaying) {
+      return videoTag.play();
+    }
+  }
+
+  // Pause video function
+  function pauseVid() {
+    if (!videoTag.paused && videoIsPlaying) {
+      videoTag.pause();
+    }
+  }
+
+  let animationFrame: number;
+
+  createEffect(() => {
+    if (isPlaying()) {
+      const updatePlayHead = () => {
+        animationFrame = requestAnimationFrame(updatePlayHead);
+
+        setPlayHeadPosition(audioCtx.currentTime - audioSourcePlayStart);
+      };
+      updatePlayHead();
+    } else {
+      cancelAnimationFrame(animationFrame);
+    }
+  });
+
+  createEffect(() => {
+    if (isPlaying()) return;
+
+    videoTag.currentTime = playHeadPosition();
+  });
+
+  onMount(() => {
+    videoTag.addEventListener("play", () => {
+      if (ignorePlayEvent) return;
+      play(videoTag.currentTime);
+    });
+    videoTag.addEventListener("pause", () => {
+      stop();
+    });
+    videoTag.addEventListener("seeking", () => {
+      setPlayHeadPosition(videoTag.currentTime);
+    });
+    videoTag.addEventListener("seeked", () => {
+      setPlayHeadPosition(videoTag.currentTime);
+    });
+  });
 
   onMount(() => {
     mutationObserver.observe(videoTag, {
@@ -176,7 +246,6 @@ function YoutubeSlicer() {
   const downloadRegions = async () => {
     const buffer = audioBuffer();
     if (!buffer || !regions().length) return;
-    console.log("downloadRegions");
 
     const { author, title, videoId } = videoData()?.details ?? {};
     const zip = new JSZip();
@@ -220,34 +289,47 @@ function YoutubeSlicer() {
     <Grid container>
       <Grid item flex={1}>
         <Waveform
-          style={{ height: "250px" }}
+          style={{ height: "100px" }}
           buffer={audioBuffer()}
           position={position()}
-          regions={regions()}
           zoom={zoom()}
           scale={scale()}
           logScale={logScale()}
           onPositionChange={setPosition}
           onZoomChange={setZoom}
           onScaleChange={setScale}
-          onUpdateRegion={(region) => {
-            const index = regions().findIndex(({ id }) => id === region.id);
-            setRegions([
-              ...regions().slice(0, index),
-              region,
-              ...regions().slice(index + 1),
-            ]);
-          }}
-          onCreateRegion={(region) => {
-            setRegions([...regions(), region]);
-          }}
-          onClickRegion={playRegion}
           strokeStyle="#f1f1f1"
-        />
+        >
+          <Regions
+            regions={regions()}
+            onUpdateRegion={(region) => {
+              const index = regions().findIndex(({ id }) => id === region.id);
+              setRegions([
+                ...regions().slice(0, index),
+                region,
+                ...regions().slice(index + 1),
+              ]);
+            }}
+            onCreateRegion={(region) => {
+              setRegions([...regions(), region]);
+            }}
+            onClickRegion={playRegion}
+          />
+          <PlayHead
+            playHeadPosition={playHeadPosition()}
+            onPlayHeadPositionChange={(newPlayheadPosition) => {
+              setPlayHeadPosition(newPlayheadPosition);
+              if (isPlaying()) {
+                play(newPlayheadPosition);
+                videoTag.currentTime = newPlayheadPosition;
+              }
+            }}
+          />
+        </Waveform>
       </Grid>
       <Grid
         item
-        height="300px"
+        height="100px"
         width="10%"
         minWidth={"400px"}
         overflow={"auto"}
@@ -296,5 +378,34 @@ function YoutubeSlicer() {
     </Grid>
   );
 }
+
+const keys = [
+  "q",
+  "w",
+  "e",
+  "r",
+  "t",
+  "y",
+  "u",
+  "i",
+  "o",
+  "p",
+  "a",
+  "s",
+  "d",
+  "f",
+  "g",
+  "h",
+  "j",
+  "k",
+  "l",
+  "z",
+  "x",
+  "c",
+  "v",
+  "b",
+  "n",
+  "m",
+];
 
 export default YoutubeSlicer;
