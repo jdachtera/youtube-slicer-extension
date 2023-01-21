@@ -16,7 +16,7 @@
     "noEmit": true,
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "types": ["vite/client", "vite-plugin-solid-svg/types"],
+    "types": ["vite/client", "vite-plugin-solid-svg/types", "@types/webmidi"],
   },
   "include": ["src", "content-script/src"],
   "references": [{ "path": "./tsconfig.node.json" }]
