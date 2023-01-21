@@ -1,5 +1,5 @@
 ytd-app {
-  position: static;
+  position: static !important;
 }
 
 #slicer-app-container {
